@@ -20,20 +20,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/splash_screen.png
-    - assets/icon.png
-    - assets/play_icon.png
-    - assets/help_icon.png
-    - assets/settings_icon.png
     - assets/words.json
 
-flutter_icons:
-  android: true
-  ios: true
-  image_path: "assets/icon.png"
-  min_sdk_android: 21
-
-flutter_native_splash:
-  image: assets/splash_screen.png
-  color: "#121212"
-  fullscreen: true

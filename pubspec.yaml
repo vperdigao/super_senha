@@ -1,0 +1,24 @@
+name: super_senha
+
+description: Jogo de adivinhação de palavras de 5 letras.
+
+publish_to: "none"
+
+version: 0.1.0
+
+environment:
+  sdk: '>=2.17.0 <3.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/words.json
+

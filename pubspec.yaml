@@ -21,4 +21,14 @@ flutter:
   uses-material-design: true
   assets:
     - assets/words.json
+    
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon.png"
+  min_sdk_android: 21
 
+flutter_native_splash:
+  image: assets/splash_screen.png
+  color: "#121212"
+  fullscreen: true

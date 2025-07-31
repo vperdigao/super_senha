@@ -24,7 +24,7 @@ Se ao compilar surgir a mensagem `Build failed due to use of deleted Android v1 
        android:value="2" />
    ```
 
-4. Confira se o arquivo `android/app/src/main/kotlin/com/example/supersenha/MainActivity.kt` estende `io.flutter.embedding.android.FlutterActivity`.
+4. Confira se o arquivo `android/app/src/main/kotlin/me/vini/super_senha/MainActivity.kt` estende `io.flutter.embedding.android.FlutterActivity`.
 5. Após ajustar os arquivos, execute `flutter clean` e `flutter pub get` para reconstruir o projeto.
 
 Esta versão do repositório já está configurada para o v2 embedding, mas caso a pasta `android/` tenha sido removida execute `flutter create .` para gerá-la novamente.

@@ -1,5 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+
+enum LetterStatus { initial, correct, partial, wrong }
 
 void main() {
   runApp(const SuperSenhaApp());
@@ -30,8 +34,14 @@ class _GamePageState extends State<GamePage> {
   static const int cols = 5;
   final List<List<String>> _board =
       List.generate(rows, (_) => List.filled(cols, ''));
+  late List<List<LetterStatus>> _status;
   int _currentRow = 0;
   int _currentCol = 0;
+
+  List<String> _dictionary = [];
+  String _secretWord = '';
+  bool _gameOver = false;
+  bool _won = false;
 
   late Timer _timer;
   String _countdown = '';
@@ -39,7 +49,11 @@ class _GamePageState extends State<GamePage> {
   @override
   void initState() {
     super.initState();
-    _startCountdown();
+    _status =
+        List.generate(rows, (_) => List.filled(cols, LetterStatus.initial));
+    _loadDictionary().then((_) {
+      _startCountdown();
+    });
   }
 
   void _startCountdown() {
@@ -61,6 +75,18 @@ class _GamePageState extends State<GamePage> {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => update());
   }
 
+  Future<void> _loadDictionary() async {
+    final data = await rootBundle.loadString('assets/words.json');
+    final List<dynamic> words = json.decode(data);
+    _dictionary = words.map((w) => w.toString().toUpperCase()).toList();
+
+    final today = DateTime.now();
+    final index = today.difference(DateTime(2022)).inDays % _dictionary.length;
+    setState(() {
+      _secretWord = _dictionary[index];
+    });
+  }
+
   @override
   void dispose() {
     _timer.cancel();
@@ -68,11 +94,11 @@ class _GamePageState extends State<GamePage> {
   }
 
   void _handleKey(String key) {
+    if (_gameOver) return;
     setState(() {
       if (key == 'ENTER') {
         if (_currentCol == cols) {
-          _currentRow = (_currentRow + 1).clamp(0, rows - 1);
-          _currentCol = 0;
+          _submitGuess();
         }
       } else if (key == 'BACK') {
         if (_currentCol > 0) {
@@ -95,14 +121,74 @@ class _GamePageState extends State<GamePage> {
       }
       _currentRow = 0;
       _currentCol = 0;
+      _status =
+          List.generate(rows, (_) => List.filled(cols, LetterStatus.initial));
+      _gameOver = false;
+      _won = false;
+      _secretWord =
+          _dictionary[(DateTime.now().millisecondsSinceEpoch) % _dictionary.length];
     });
+  }
+
+  void _submitGuess() {
+    final guess = _board[_currentRow].join().toUpperCase();
+    if (!_dictionary.contains(guess)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Palavra inválida')),
+      );
+      return;
+    }
+
+    for (var i = 0; i < cols; i++) {
+      final letter = guess[i];
+      if (letter == _secretWord[i]) {
+        _status[_currentRow][i] = LetterStatus.correct;
+      } else if (_secretWord.contains(letter)) {
+        _status[_currentRow][i] = LetterStatus.partial;
+      } else {
+        _status[_currentRow][i] = LetterStatus.wrong;
+      }
+    }
+
+    if (guess == _secretWord) {
+      _gameOver = true;
+      _won = true;
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Você acertou!'),
+          content: Text('A palavra correta é $_secretWord'),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
+        ),
+      );
+    } else if (_currentRow == rows - 1) {
+      _gameOver = true;
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Não foi desta vez'),
+          content: Text('A palavra correta era $_secretWord'),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
+        ),
+      );
+    } else {
+      _currentRow++;
+      _currentCol = 0;
+    }
+
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Super Senha'),
+        title: Row(
+          children: [
+            const Text('Super Senha '),
+            Icon(_won ? Icons.lock_open : Icons.lock),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.help_outline),
@@ -156,12 +242,28 @@ class _GamePageState extends State<GamePage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(cols, (c) {
             final letter = _board[r][c];
+            final status = _status[r][c];
+            Color bgColor;
+            switch (status) {
+              case LetterStatus.correct:
+                bgColor = Colors.green;
+                break;
+              case LetterStatus.partial:
+                bgColor = Colors.yellow;
+                break;
+              case LetterStatus.wrong:
+                bgColor = Colors.grey.shade800;
+                break;
+              default:
+                bgColor = Colors.transparent;
+            }
             return Container(
               width: 40,
               height: 40,
               margin: const EdgeInsets.all(4),
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.grey),
+                color: bgColor,
               ),
               alignment: Alignment.center,
               child: Text(letter.toUpperCase(),
@@ -186,7 +288,7 @@ class _GamePageState extends State<GamePage> {
         return Padding(
           padding: const EdgeInsets.all(4),
           child: ElevatedButton(
-            onPressed: () => _handleKey(k),
+            onPressed: _gameOver ? null : () => _handleKey(k),
             child: Text(k.length == 1 ? k : (k == 'BACK' ? '⌫' : '⏎')),
           ),
         );

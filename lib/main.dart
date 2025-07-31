@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -97,6 +97,10 @@ class _GamePageState extends State<GamePage> {
   late Timer _timer;
   String _countdown = '';
 
+  bool _useDeviceKeyboard = true;
+  final FocusNode _focusNode = FocusNode();
+  final TextEditingController _textController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -130,6 +134,11 @@ class _GamePageState extends State<GamePage> {
     await _loadPreferences();
     await _loadState();
     _startCountdown();
+    if (_useDeviceKeyboard) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _focusNode.requestFocus();
+      });
+    }
     if (!_tutorialShown) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _showHelpDialog();
@@ -256,6 +265,7 @@ class _GamePageState extends State<GamePage> {
     _realWordsOnly = prefs.getBool('realWordsOnly') ?? true;
     _jumpToNextLine = prefs.getBool('jumpToNextLine') ?? true;
     _tutorialShown = prefs.getBool('tutorialShown') ?? false;
+    _useDeviceKeyboard = prefs.getBool('useDeviceKeyboard') ?? true;
     _currentStreak = prefs.getInt('currentStreak') ?? 0;
     _lastCompletedDate = prefs.getString('lastCompletedDate') ?? '';
     final dailyJson = prefs.getString('dailyStats');
@@ -273,6 +283,7 @@ class _GamePageState extends State<GamePage> {
     prefs.setBool('realWordsOnly', _realWordsOnly);
     prefs.setBool('jumpToNextLine', _jumpToNextLine);
     prefs.setBool('tutorialShown', _tutorialShown);
+    prefs.setBool('useDeviceKeyboard', _useDeviceKeyboard);
     prefs.setInt('currentStreak', _currentStreak);
     prefs.setString('lastCompletedDate', _lastCompletedDate);
     prefs.setString('dailyStats', json.encode(_wordDayStats.toJson()));
@@ -282,7 +293,25 @@ class _GamePageState extends State<GamePage> {
   @override
   void dispose() {
     _timer.cancel();
+    _focusNode.dispose();
+    _textController.dispose();
     super.dispose();
+  }
+
+  void _onRawKey(RawKeyEvent event) {
+    if (!_useDeviceKeyboard) return;
+    if (event is RawKeyDownEvent) {
+      if (event.logicalKey == LogicalKeyboardKey.enter) {
+        _handleKey('ENTER');
+      } else if (event.logicalKey == LogicalKeyboardKey.backspace) {
+        _handleKey('BACK');
+      } else {
+        final key = event.character?.toUpperCase();
+        if (key != null && key.length == 1 && RegExp(r'^[A-Z]$').hasMatch(key)) {
+          _handleKey(key);
+        }
+      }
+    }
   }
 
   void _handleKey(String key) {
@@ -500,7 +529,10 @@ class _GamePageState extends State<GamePage> {
           )
         ],
       ),
-      body: Column(
+      body: RawKeyboardListener(
+        focusNode: _focusNode,
+        onKey: _onRawKey,
+        child: Column(
         children: [
           Container(
             width: double.infinity,
@@ -516,7 +548,20 @@ class _GamePageState extends State<GamePage> {
           const SizedBox(height: 16),
           _buildBoard(),
           const SizedBox(height: 24),
-          _buildKeyboard(),
+          if (_useDeviceKeyboard)
+            Offstage(
+              offstage: true,
+              child: TextField(
+                focusNode: _focusNode,
+                controller: _textController,
+                autofocus: true,
+                onChanged: (_) => _textController.clear(),
+                decoration: const InputDecoration(border: InputBorder.none),
+                style: const TextStyle(fontSize: 0),
+              ),
+            )
+          else
+            _buildKeyboard(),
           const SizedBox(height: 24),
           ElevatedButton(
             onPressed: _resetGameRandom,
@@ -568,6 +613,7 @@ class _GamePageState extends State<GamePage> {
   }
 
   Widget _buildKeyboard() {
+    if (_useDeviceKeyboard) return const SizedBox.shrink();
     const letters = 'QWERTYUIOPASDFGHJKLZXCVBNM';
     final keys = [
       ...letters.split(''),
@@ -720,6 +766,7 @@ class _GamePageState extends State<GamePage> {
           bool ignoreAcc = _ignoreAccentuation;
           bool realOnly = _realWordsOnly;
           bool jump = _jumpToNextLine;
+          bool deviceKb = _useDeviceKeyboard;
           return StatefulBuilder(builder: (ctx, setStateSB) {
             return AlertDialog(
               title: const Text('Configurações'),
@@ -742,6 +789,11 @@ class _GamePageState extends State<GamePage> {
                     value: jump,
                     onChanged: (v) => setStateSB(() => jump = v ?? true),
                   ),
+                  CheckboxListTile(
+                    title: const Text('Usar teclado do dispositivo'),
+                    value: deviceKb,
+                    onChanged: (v) => setStateSB(() => deviceKb = v ?? true),
+                  ),
                 ],
               ),
               actions: [
@@ -751,7 +803,11 @@ class _GamePageState extends State<GamePage> {
                         _ignoreAccentuation = ignoreAcc;
                         _realWordsOnly = realOnly;
                         _jumpToNextLine = jump;
+                        _useDeviceKeyboard = deviceKb;
                       });
+                      if (_useDeviceKeyboard) {
+                        _focusNode.requestFocus();
+                      }
                       _savePreferences();
                       Navigator.pop(ctx);
                     },

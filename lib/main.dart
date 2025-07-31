@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -32,6 +33,40 @@ class _GamePageState extends State<GamePage> {
   int _currentRow = 0;
   int _currentCol = 0;
 
+  late Timer _timer;
+  String _countdown = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _startCountdown();
+  }
+
+  void _startCountdown() {
+    void update() {
+      final now = DateTime.now();
+      final nextMidnight = DateTime(now.year, now.month, now.day + 1);
+      final remaining = nextMidnight.difference(now);
+      final hours = remaining.inHours.remainder(24).toString().padLeft(2, '0');
+      final minutes =
+          remaining.inMinutes.remainder(60).toString().padLeft(2, '0');
+      final seconds =
+          remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
+      setState(() {
+        _countdown = '$hours:$minutes:$seconds';
+      });
+    }
+
+    update();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => update());
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
   void _handleKey(String key) {
     setState(() {
       if (key == 'ENTER') {
@@ -51,16 +86,64 @@ class _GamePageState extends State<GamePage> {
     });
   }
 
+  void _resetGame() {
+    setState(() {
+      for (var r = 0; r < rows; r++) {
+        for (var c = 0; c < cols; c++) {
+          _board[r][c] = '';
+        }
+      }
+      _currentRow = 0;
+      _currentCol = 0;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Super Senha')),
+      appBar: AppBar(
+        title: const Text('Super Senha'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.help_outline),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.bar_chart),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {},
+          ),
+          TextButton(
+            onPressed: () {},
+            child: const Text('Sobre', style: TextStyle(color: Colors.white)),
+          )
+        ],
+      ),
       body: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          Container(
+            width: double.infinity,
+            color: Colors.red,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Center(
+              child: Text(
+                'Próxima palavra do dia em: $_countdown',
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           _buildBoard(),
           const SizedBox(height: 24),
           _buildKeyboard(),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: _resetGame,
+            child: const Text('Jogar novamente'),
+          ),
         ],
       ),
     );

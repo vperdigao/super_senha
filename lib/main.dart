@@ -8,6 +8,39 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 enum LetterStatus { initial, correct, partial, wrong }
 
+class GameStats {
+  int total;
+  int won;
+  List<int> distribution;
+
+  GameStats({this.total = 0, this.won = 0, List<int>? distribution})
+      : distribution = distribution ?? List.filled(6, 0);
+
+  factory GameStats.fromJson(Map<String, dynamic> json) {
+    return GameStats(
+      total: json['total'] ?? 0,
+      won: json['won'] ?? 0,
+      distribution:
+          (json['distribution'] as List<dynamic>?)?.map((e) => e as int).toList() ??
+              List.filled(6, 0),
+    );
+  }
+
+  Map<String, dynamic> toJson() =>
+      {'total': total, 'won': won, 'distribution': distribution};
+}
+
+String removeDiacritics(String str) {
+  const withAccent =
+      'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇáàâãäéèêëíìîïóòôõöúùûüç';
+  const withoutAccent =
+      'AAAAAEEEEIIIIOOOOOUUUUCaaaaaeeeeiiiiooooouuuuc';
+  for (var i = 0; i < withAccent.length; i++) {
+    str = str.replaceAll(withAccent[i], withoutAccent[i]);
+  }
+  return str;
+}
+
 void main() {
   runApp(const SuperSenhaApp());
 }
@@ -40,6 +73,18 @@ class _GamePageState extends State<GamePage> {
   late List<List<LetterStatus>> _status;
   int _currentRow = 0;
   int _currentCol = 0;
+
+  bool _ignoreAccentuation = true;
+  bool _realWordsOnly = true;
+  bool _jumpToNextLine = true;
+  bool _tutorialShown = false;
+
+  late GameStats _wordDayStats;
+  late GameStats _generalStats;
+  int _currentStreak = 0;
+  String _lastCompletedDate = '';
+
+  List<String> _normalizedDictionary = [];
 
   List<String> _dictionary = [];
   String _secretWord = '';
@@ -82,8 +127,14 @@ class _GamePageState extends State<GamePage> {
 
   Future<void> _initializeGame() async {
     await _loadDictionary();
+    await _loadPreferences();
     await _loadState();
     _startCountdown();
+    if (!_tutorialShown) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showHelpDialog();
+      });
+    }
   }
 
   Future<void> _loadState() async {
@@ -195,6 +246,37 @@ class _GamePageState extends State<GamePage> {
       final List<dynamic> words = json.decode(data);
       _dictionary = words.map((w) => w.toString().toUpperCase()).toList();
     }
+    _normalizedDictionary =
+        _dictionary.map((w) => removeDiacritics(w)).toList();
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    _ignoreAccentuation = prefs.getBool('ignoreAccentuation') ?? true;
+    _realWordsOnly = prefs.getBool('realWordsOnly') ?? true;
+    _jumpToNextLine = prefs.getBool('jumpToNextLine') ?? true;
+    _tutorialShown = prefs.getBool('tutorialShown') ?? false;
+    _currentStreak = prefs.getInt('currentStreak') ?? 0;
+    _lastCompletedDate = prefs.getString('lastCompletedDate') ?? '';
+    final dailyJson = prefs.getString('dailyStats');
+    final generalJson = prefs.getString('generalStats');
+    _wordDayStats =
+        dailyJson != null ? GameStats.fromJson(json.decode(dailyJson)) : GameStats();
+    _generalStats = generalJson != null
+        ? GameStats.fromJson(json.decode(generalJson))
+        : GameStats();
+  }
+
+  Future<void> _savePreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    prefs.setBool('ignoreAccentuation', _ignoreAccentuation);
+    prefs.setBool('realWordsOnly', _realWordsOnly);
+    prefs.setBool('jumpToNextLine', _jumpToNextLine);
+    prefs.setBool('tutorialShown', _tutorialShown);
+    prefs.setInt('currentStreak', _currentStreak);
+    prefs.setString('lastCompletedDate', _lastCompletedDate);
+    prefs.setString('dailyStats', json.encode(_wordDayStats.toJson()));
+    prefs.setString('generalStats', json.encode(_generalStats.toJson()));
   }
 
   @override
@@ -218,7 +300,7 @@ class _GamePageState extends State<GamePage> {
       } else if (_currentCol < cols && key.length == 1) {
         _board[_currentRow][_currentCol] = key;
         _currentCol++;
-        if (_currentCol == cols) {
+        if (_currentCol == cols && _jumpToNextLine) {
           _submitGuess();
         }
       }
@@ -244,30 +326,68 @@ class _GamePageState extends State<GamePage> {
     _saveState();
   }
 
+  void _recordGameResult(bool won) {
+    final attempts = _currentRow + 1;
+    if (_usingDailyWord) {
+      _wordDayStats.total++;
+      if (won) {
+        _wordDayStats.won++;
+        _wordDayStats.distribution[attempts - 1]++;
+        final yesterday = DateTime.now()
+            .subtract(const Duration(days: 1))
+            .toIso8601String()
+            .substring(0, 10);
+        if (_lastCompletedDate == yesterday) {
+          _currentStreak++;
+        } else if (_lastCompletedDate != _todayKey) {
+          _currentStreak = 1;
+        }
+        _lastCompletedDate = _todayKey;
+      } else {
+        _currentStreak = 0;
+      }
+    }
+    _generalStats.total++;
+    if (won) {
+      _generalStats.won++;
+      _generalStats.distribution[attempts - 1]++;
+    }
+    _savePreferences();
+  }
+
   void _submitGuess() {
     final guess = _board[_currentRow].join().toUpperCase();
-    if (!_dictionary.contains(guess)) {
+    final normalizedGuess =
+        _ignoreAccentuation ? removeDiacritics(guess) : guess;
+    final dict = _ignoreAccentuation ? _normalizedDictionary : _dictionary;
+    if (_realWordsOnly && !dict.contains(normalizedGuess)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Palavra inválida')),
       );
       return;
     }
 
+    final target =
+        _ignoreAccentuation ? removeDiacritics(_secretWord) : _secretWord;
     for (var i = 0; i < cols; i++) {
       final letter = guess[i];
-      if (letter == _secretWord[i]) {
+      final normLetter =
+          _ignoreAccentuation ? removeDiacritics(letter) : letter;
+      if (normLetter == target[i]) {
         _status[_currentRow][i] = LetterStatus.correct;
-      } else if (_secretWord.contains(letter)) {
+      } else if (target.contains(normLetter)) {
         _status[_currentRow][i] = LetterStatus.partial;
       } else {
         _status[_currentRow][i] = LetterStatus.wrong;
       }
     }
 
-    if (guess == _secretWord) {
+    final isCorrect = normalizedGuess == target;
+    if (isCorrect) {
       _gameOver = true;
       _won = true;
       _playedToday = true;
+      _recordGameResult(true);
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
@@ -307,6 +427,7 @@ class _GamePageState extends State<GamePage> {
     } else if (_currentRow == rows - 1) {
       _gameOver = true;
       _playedToday = true;
+      _recordGameResult(false);
       bool reveal = false;
       showDialog(
         context: context,
@@ -363,18 +484,18 @@ class _GamePageState extends State<GamePage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.help_outline),
-            onPressed: () {},
+            onPressed: _showHelpDialog,
           ),
           IconButton(
             icon: const Icon(Icons.bar_chart),
-            onPressed: () {},
+            onPressed: _showStatsDialog,
           ),
           IconButton(
             icon: const Icon(Icons.settings),
-            onPressed: () {},
+            onPressed: _showSettingsDialog,
           ),
           TextButton(
-            onPressed: () {},
+            onPressed: _showAboutDialog,
             child: const Text('Sobre', style: TextStyle(color: Colors.white)),
           )
         ],
@@ -465,5 +586,194 @@ class _GamePageState extends State<GamePage> {
         );
       }).toList(),
     );
+  }
+
+  void _showHelpDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Como jogar'),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Adivinhe a senha em até 6 tentativas;'),
+              Text('Cada tentativa deve conter uma palavra válida de 5 letras;'),
+              Text('Não precisa acertar a acentuação;'),
+              Text('Após cada tentativa as letras corretas serão sinalizadas com cores diferentes;'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _tutorialShown = true;
+              _savePreferences();
+              Navigator.pop(context);
+            },
+            child: const Text('Jogar agora'),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _statsBars(GameStats stats) {
+    final maxVal = stats.won == 0
+        ? 1
+        : stats.distribution.reduce((a, b) => a > b ? a : b);
+    return Column(
+      children: List.generate(6, (i) {
+        final val = stats.distribution[i];
+        return Row(
+          children: [
+            SizedBox(width: 20, child: Text('${i + 1}')),
+            Expanded(
+              child: LinearProgressIndicator(
+                value: val / maxVal,
+              ),
+            ),
+            SizedBox(width: 30, child: Text(' $val')),
+          ],
+        );
+      }),
+    );
+  }
+
+  Widget _buildStatsContent(GameStats stats, {bool showStreak = false}) {
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Column(
+                children: [
+                  const Text('Partidas'),
+                  Text('${stats.total}'),
+                ],
+              ),
+              Column(
+                children: [
+                  const Text('Acertos'),
+                  Text('${stats.won}'),
+                ],
+              ),
+              if (showStreak)
+                Column(
+                  children: [
+                    const Text('Consecutivos'),
+                    Text('$_currentStreak'),
+                  ],
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _statsBars(stats),
+        ],
+      ),
+    );
+  }
+
+  void _showStatsDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Estatísticas'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: DefaultTabController(
+            length: 2,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const TabBar(tabs: [
+                  Tab(text: 'Palavra do dia'),
+                  Tab(text: 'Geral'),
+                ]),
+                SizedBox(
+                  height: 200,
+                  child: TabBarView(
+                    children: [
+                      _buildStatsContent(_wordDayStats, showStreak: true),
+                      _buildStatsContent(_generalStats),
+                    ],
+                  ),
+                )
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Fechar'))
+        ],
+      ),
+    );
+  }
+
+  void _showSettingsDialog() {
+    showDialog(
+        context: context,
+        builder: (ctx) {
+          bool ignoreAcc = _ignoreAccentuation;
+          bool realOnly = _realWordsOnly;
+          bool jump = _jumpToNextLine;
+          return StatefulBuilder(builder: (ctx, setStateSB) {
+            return AlertDialog(
+              title: const Text('Configurações'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CheckboxListTile(
+                    title: const Text('Ignorar acentuação'),
+                    value: ignoreAcc,
+                    onChanged: (v) => setStateSB(() => ignoreAcc = v ?? true),
+                  ),
+                  CheckboxListTile(
+                    title: const Text('Apenas palavras reais'),
+                    value: realOnly,
+                    onChanged: (v) => setStateSB(() => realOnly = v ?? true),
+                  ),
+                  CheckboxListTile(
+                    title: const Text(
+                        'Passar automaticamente para a próxima linha'),
+                    value: jump,
+                    onChanged: (v) => setStateSB(() => jump = v ?? true),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _ignoreAccentuation = ignoreAcc;
+                        _realWordsOnly = realOnly;
+                        _jumpToNextLine = jump;
+                      });
+                      _savePreferences();
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text('Fechar'))
+              ],
+            );
+          });
+        });
+  }
+
+  void _showAboutDialog() {
+    showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+              title: const Text('Sobre'),
+              content: const Text(
+                  'Adaptação em português do Wordle por Josh Wardle.\nSuper senha foi desenvolvido por Vinicius Perdigão como um exercício.'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Fechar'))
+              ],
+            ));
   }
 }

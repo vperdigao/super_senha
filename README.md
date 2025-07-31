@@ -28,3 +28,7 @@ Se ao compilar surgir a mensagem `Build failed due to use of deleted Android v1 
 5. Após ajustar os arquivos, execute `flutter clean` e `flutter pub get` para reconstruir o projeto.
 
 Esta versão do repositório já está configurada para o v2 embedding, mas caso a pasta `android/` tenha sido removida execute `flutter create .` para gerá-la novamente.
+
+## Configurações
+
+No menu de configurações do aplicativo é possível escolher se prefere usar o teclado virtual da aplicação ou o teclado do dispositivo. Por padrão, o teclado do dispositivo é utilizado.

@@ -20,9 +20,10 @@ class GameStats {
     return GameStats(
       total: json['total'] ?? 0,
       won: json['won'] ?? 0,
-      distribution:
-          (json['distribution'] as List<dynamic>?)?.map((e) => e as int).toList() ??
-              List.filled(6, 0),
+      distribution: (json['distribution'] as List<dynamic>?)
+              ?.map((e) => e as int)
+              .toList() ??
+          List.filled(6, 0),
     );
   }
 
@@ -31,10 +32,8 @@ class GameStats {
 }
 
 String removeDiacritics(String str) {
-  const withAccent =
-      'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇáàâãäéèêëíìîïóòôõöúùûüç';
-  const withoutAccent =
-      'AAAAAEEEEIIIIOOOOOUUUUCaaaaaeeeeiiiiooooouuuuc';
+  const withAccent = 'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇáàâãäéèêëíìîïóòôõöúùûüç';
+  const withoutAccent = 'AAAAAEEEEIIIIOOOOOUUUUCaaaaaeeeeiiiiooooouuuuc';
   for (var i = 0; i < withAccent.length; i++) {
     str = str.replaceAll(withAccent[i], withoutAccent[i]);
   }
@@ -169,8 +168,7 @@ class _GamePageState extends State<GamePage> {
         final List<dynamic> statusList = json.decode(statusJson);
         for (var r = 0; r < rows; r++) {
           for (var c = 0; c < cols; c++) {
-            _status[r][c] =
-                LetterStatus.values[statusList[r][c] as int];
+            _status[r][c] = LetterStatus.values[statusList[r][c] as int];
           }
         }
       }
@@ -193,8 +191,8 @@ class _GamePageState extends State<GamePage> {
 
   Future<String> _fetchWordOfDay() async {
     try {
-      final response =
-          await http.get(Uri.parse('https://vini.me/supersenha/supersenha.asp'));
+      final response = await http
+          .get(Uri.parse('https://vini.me/supersenha/supersenha.asp'));
       if (response.statusCode == 200) {
         return response.body.trim().toUpperCase();
       }
@@ -245,8 +243,7 @@ class _GamePageState extends State<GamePage> {
         final end = text.lastIndexOf(']');
         final jsonList = text.substring(start, end + 1).replaceAll("'", '"');
         final List<dynamic> words = json.decode(jsonList);
-        _dictionary =
-            words.map((w) => w.toString().toUpperCase()).toList();
+        _dictionary = words.map((w) => w.toString().toUpperCase()).toList();
       }
     } catch (_) {}
 
@@ -270,8 +267,9 @@ class _GamePageState extends State<GamePage> {
     _lastCompletedDate = prefs.getString('lastCompletedDate') ?? '';
     final dailyJson = prefs.getString('dailyStats');
     final generalJson = prefs.getString('generalStats');
-    _wordDayStats =
-        dailyJson != null ? GameStats.fromJson(json.decode(dailyJson)) : GameStats();
+    _wordDayStats = dailyJson != null
+        ? GameStats.fromJson(json.decode(dailyJson))
+        : GameStats();
     _generalStats = generalJson != null
         ? GameStats.fromJson(json.decode(generalJson))
         : GameStats();
@@ -307,7 +305,9 @@ class _GamePageState extends State<GamePage> {
         _handleKey('BACK');
       } else {
         final key = event.character?.toUpperCase();
-        if (key != null && key.length == 1 && RegExp(r'^[A-Z]$').hasMatch(key)) {
+        if (key != null &&
+            key.length == 1 &&
+            RegExp(r'^[A-Z]$').hasMatch(key)) {
           _handleKey(key);
         }
       }
@@ -470,14 +470,15 @@ class _GamePageState extends State<GamePage> {
                 const SizedBox(height: 8),
                 ElevatedButton(
                   onPressed: () => setStateSB(() => reveal = true),
-                  style:
-                      ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                  child: Text(reveal ? _secretWord.toUpperCase() : 'Clique para ver'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  child: Text(
+                      reveal ? _secretWord.toUpperCase() : 'Clique para ver'),
                 ),
                 if (reveal)
                   Padding(
                     padding: const EdgeInsets.all(8.0),
-                    child: Text('https://dicio.com.br/${_secretWord.toLowerCase()}'),
+                    child: Text(
+                        'https://dicio.com.br/${_secretWord.toLowerCase()}'),
                   ),
               ],
             ),
@@ -533,41 +534,42 @@ class _GamePageState extends State<GamePage> {
         focusNode: _focusNode,
         onKey: _onRawKey,
         child: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            color: Colors.red,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Center(
-              child: Text(
-                'Próxima palavra do dia em: $_countdown',
-                style: const TextStyle(color: Colors.white),
+          children: [
+            Container(
+              width: double.infinity,
+              color: Colors.red,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Center(
+                child: Text(
+                  'Próxima palavra do dia em: $_countdown',
+                  style: const TextStyle(color: Colors.white),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          _buildBoard(),
-          const SizedBox(height: 24),
-          if (_useDeviceKeyboard)
-            Offstage(
-              offstage: true,
-              child: TextField(
-                focusNode: _focusNode,
-                controller: _textController,
-                autofocus: true,
-                onChanged: (_) => _textController.clear(),
-                decoration: const InputDecoration(border: InputBorder.none),
-                style: const TextStyle(fontSize: 0),
-              ),
-            )
-          else
-            _buildKeyboard(),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: _resetGameRandom,
-            child: const Text('Jogar novamente'),
-          ),
-        ],
+            const SizedBox(height: 16),
+            _buildBoard(),
+            const SizedBox(height: 24),
+            if (_useDeviceKeyboard)
+              Offstage(
+                offstage: true,
+                child: TextField(
+                  focusNode: _focusNode,
+                  controller: _textController,
+                  autofocus: true,
+                  onChanged: (_) => _textController.clear(),
+                  decoration: const InputDecoration(border: InputBorder.none),
+                  style: const TextStyle(fontSize: 0),
+                ),
+              )
+            else
+              _buildKeyboard(),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _resetGameRandom,
+              child: const Text('Jogar novamente'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -644,9 +646,11 @@ class _GamePageState extends State<GamePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Adivinhe a senha em até 6 tentativas;'),
-              Text('Cada tentativa deve conter uma palavra válida de 5 letras;'),
+              Text(
+                  'Cada tentativa deve conter uma palavra válida de 5 letras;'),
               Text('Não precisa acertar a acentuação;'),
-              Text('Após cada tentativa as letras corretas serão sinalizadas com cores diferentes;'),
+              Text(
+                  'Após cada tentativa as letras corretas serão sinalizadas com cores diferentes;'),
             ],
           ),
         ),
@@ -665,9 +669,8 @@ class _GamePageState extends State<GamePage> {
   }
 
   Widget _statsBars(GameStats stats) {
-    final maxVal = stats.won == 0
-        ? 1
-        : stats.distribution.reduce((a, b) => a > b ? a : b);
+    final maxVal =
+        stats.won == 0 ? 1 : stats.distribution.reduce((a, b) => a > b ? a : b);
     return Column(
       children: List.generate(6, (i) {
         final val = stats.distribution[i];

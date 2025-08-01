@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -93,12 +94,14 @@ class _GamePageState extends State<GamePage> {
   late String _todayKey;
   bool _playedToday = false;
 
-  late Timer _timer;
+  Timer? _timer;
   String _countdown = '';
 
   bool _useDeviceKeyboard = true;
   final FocusNode _focusNode = FocusNode();
   final TextEditingController _textController = TextEditingController();
+
+  bool get _isTesting => Platform.environment.containsKey('FLUTTER_TEST');
 
   @override
   void initState() {
@@ -106,7 +109,11 @@ class _GamePageState extends State<GamePage> {
     _status =
         List.generate(rows, (_) => List.filled(cols, LetterStatus.initial));
     _todayKey = DateTime.now().toIso8601String().substring(0, 10);
-    _initializeGame();
+    if (_isTesting) {
+      _useDeviceKeyboard = false;
+    } else {
+      _initializeGame();
+    }
   }
 
   void _startCountdown() {
@@ -135,12 +142,16 @@ class _GamePageState extends State<GamePage> {
     _startCountdown();
     if (_useDeviceKeyboard) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _focusNode.requestFocus();
+        if (mounted) {
+          _focusNode.requestFocus();
+        }
       });
     }
     if (!_tutorialShown) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _showHelpDialog();
+        if (mounted) {
+          _showHelpDialog();
+        }
       });
     }
   }
@@ -290,7 +301,7 @@ class _GamePageState extends State<GamePage> {
 
   @override
   void dispose() {
-    _timer.cancel();
+    _timer?.cancel();
     _focusNode.dispose();
     _textController.dispose();
     super.dispose();
@@ -507,7 +518,7 @@ class _GamePageState extends State<GamePage> {
       appBar: AppBar(
         title: Row(
           children: [
-            const Text('Super Senha '),
+            const Text('Super Senha'),
             Icon(_won ? Icons.lock_open : Icons.lock),
           ],
         ),

@@ -560,6 +560,7 @@ class _GamePageState extends State<GamePage> {
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
+    final isLightTheme = Theme.of(context).brightness == Brightness.light;
     final actions = [
       IconButton(
         icon: const Icon(Icons.help_outline),
@@ -575,7 +576,12 @@ class _GamePageState extends State<GamePage> {
       ),
       TextButton(
         onPressed: _showAboutDialog,
-        child: const Text('Sobre', style: TextStyle(color: Colors.white)),
+        child: Text(
+          'Sobre',
+          style: TextStyle(
+            color: isLightTheme ? Colors.black : Colors.white,
+          ),
+        ),
       )
     ];
     final titleRow = Row(
@@ -620,6 +626,18 @@ class _GamePageState extends State<GamePage> {
             ),
             const SizedBox(height: 16),
             Expanded(child: _buildBoard()),
+            if (_gameOver)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: _resetGameRandom,
+                  child: const Text('Jogar novamente'),
+                ),
+              ),
             const SizedBox(height: 24),
             if (_useDeviceKeyboard)
               Offstage(
@@ -636,10 +654,6 @@ class _GamePageState extends State<GamePage> {
             else
               _buildKeyboard(),
             const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _resetGameRandom,
-              child: const Text('Jogar novamente'),
-            ),
           ],
         ),
       ),
@@ -696,7 +710,13 @@ class _GamePageState extends State<GamePage> {
                   alignment: Alignment.center,
                   child: Text(
                     letter.toUpperCase(),
-                    style: TextStyle(fontSize: fontSize),
+                    style: TextStyle(
+                      fontSize: fontSize,
+                      color: status == LetterStatus.wrong &&
+                              Theme.of(context).brightness == Brightness.light
+                          ? Colors.white
+                          : null,
+                    ),
                   ),
                 );
               }),

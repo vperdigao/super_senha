@@ -18,6 +18,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
@@ -33,6 +34,8 @@ flutter_icons:
   android: true
   ios: true
   image_path: "assets/icon.png"
+  adaptive_icon_foreground: "assets/icon.png"
+  adaptive_icon_background: "#fcd52b"  # amarelo do fundo
   min_sdk_android: 21
 
 flutter_native_splash:

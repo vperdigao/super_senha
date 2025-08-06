@@ -45,14 +45,32 @@ void main() {
   runApp(const SuperSenhaApp());
 }
 
-class SuperSenhaApp extends StatelessWidget {
+class SuperSenhaApp extends StatefulWidget {
   const SuperSenhaApp({super.key});
+
+  static _SuperSenhaAppState of(BuildContext context) =>
+      context.findAncestorStateOfType<_SuperSenhaAppState>()!;
+
+  @override
+  State<SuperSenhaApp> createState() => _SuperSenhaAppState();
+}
+
+class _SuperSenhaAppState extends State<SuperSenhaApp> {
+  ThemeMode _themeMode = ThemeMode.system;
+
+  void updateTheme(ThemeMode mode) {
+    setState(() {
+      _themeMode = mode;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Super Senha',
-      theme: ThemeData.dark(),
+      theme: ThemeData.light(),
+      darkTheme: ThemeData.dark(),
+      themeMode: _themeMode,
       home: const GamePage(),
     );
   }
@@ -78,6 +96,7 @@ class _GamePageState extends State<GamePage> {
   bool _realWordsOnly = true;
   bool _jumpToNextLine = true;
   bool _tutorialShown = false;
+  ThemeMode _themeMode = ThemeMode.system;
 
   late GameStats _wordDayStats;
   late GameStats _generalStats;
@@ -138,6 +157,7 @@ class _GamePageState extends State<GamePage> {
   Future<void> _initializeGame() async {
     await _loadDictionary();
     await _loadPreferences();
+    SuperSenhaApp.of(context).updateTheme(_themeMode);
     await _loadState();
     _startCountdown();
     if (_useDeviceKeyboard) {
@@ -275,6 +295,7 @@ class _GamePageState extends State<GamePage> {
     _jumpToNextLine = prefs.getBool('jumpToNextLine') ?? true;
     _tutorialShown = prefs.getBool('tutorialShown') ?? false;
     _useDeviceKeyboard = prefs.getBool('useDeviceKeyboard') ?? true;
+    _themeMode = ThemeMode.values[prefs.getInt('themeMode') ?? 0];
     _currentStreak = prefs.getInt('currentStreak') ?? 0;
     _lastCompletedDate = prefs.getString('lastCompletedDate') ?? '';
     final dailyJson = prefs.getString('dailyStats');
@@ -298,6 +319,7 @@ class _GamePageState extends State<GamePage> {
     prefs.setString('lastCompletedDate', _lastCompletedDate);
     prefs.setString('dailyStats', json.encode(_wordDayStats.toJson()));
     prefs.setString('generalStats', json.encode(_generalStats.toJson()));
+    prefs.setInt('themeMode', _themeMode.index);
   }
 
   @override
@@ -537,32 +559,48 @@ class _GamePageState extends State<GamePage> {
 
   @override
   Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    final actions = [
+      IconButton(
+        icon: const Icon(Icons.help_outline),
+        onPressed: _showHelpDialog,
+      ),
+      IconButton(
+        icon: const Icon(Icons.bar_chart),
+        onPressed: _showStatsDialog,
+      ),
+      IconButton(
+        icon: const Icon(Icons.settings),
+        onPressed: _showSettingsDialog,
+      ),
+      TextButton(
+        onPressed: _showAboutDialog,
+        child: const Text('Sobre', style: TextStyle(color: Colors.white)),
+      )
+    ];
+    final titleRow = Row(
+      children: [
+        const Text('Super Senha'),
+        Icon(_won ? Icons.lock_open : Icons.lock),
+      ],
+    );
+    final needsTwoLines = mq.textScaleFactor > 1.2 || mq.size.width < 400;
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            const Text('Super Senha'),
-            Icon(_won ? Icons.lock_open : Icons.lock),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.help_outline),
-            onPressed: _showHelpDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.bar_chart),
-            onPressed: _showStatsDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: _showSettingsDialog,
-          ),
-          TextButton(
-            onPressed: _showAboutDialog,
-            child: const Text('Sobre', style: TextStyle(color: Colors.white)),
-          )
-        ],
+        toolbarHeight: needsTwoLines ? kToolbarHeight * 2 : kToolbarHeight,
+        title: needsTwoLines
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  titleRow,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: actions,
+                  ),
+                ],
+              )
+            : titleRow,
+        actions: needsTwoLines ? null : actions,
       ),
       body: RawKeyboardListener(
         focusNode: _focusNode,
@@ -581,7 +619,7 @@ class _GamePageState extends State<GamePage> {
               ),
             ),
             const SizedBox(height: 16),
-            _buildBoard(),
+            Expanded(child: _buildBoard()),
             const SizedBox(height: 24),
             if (_useDeviceKeyboard)
               Offstage(
@@ -609,47 +647,64 @@ class _GamePageState extends State<GamePage> {
   }
 
   Widget _buildBoard() {
-    return GestureDetector(
-      onTap: _focusFirstEmptyCell,
-      behavior: HitTestBehavior.translucent,
-      child: Column(
-        children: List.generate(rows, (r) {
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(cols, (c) {
-              final letter = _board[r][c];
-              final status = _status[r][c];
-              Color bgColor;
-              switch (status) {
-                case LetterStatus.correct:
-                  bgColor = Colors.green;
-                  break;
-                case LetterStatus.partial:
-                  bgColor = Colors.yellow;
-                  break;
-                case LetterStatus.wrong:
-                  bgColor = Colors.grey.shade800;
-                  break;
-                default:
-                  bgColor = Colors.transparent;
-              }
-              return Container(
-                width: 40,
-                height: 40,
-                margin: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                  color: bgColor,
-                ),
-                alignment: Alignment.center,
-                child: Text(letter.toUpperCase(),
-                    style: const TextStyle(fontSize: 18)),
-              );
-            }),
-          );
-        }),
-      ),
-    );
+    return LayoutBuilder(builder: (context, constraints) {
+      final mq = MediaQuery.of(context);
+      final cellSizeFromWidth =
+          (constraints.maxWidth - 8 * cols) / cols;
+      final cellSizeFromHeight =
+          (constraints.maxHeight - 8 * rows) / rows;
+      final baseCell = min(cellSizeFromWidth, cellSizeFromHeight);
+      var cellSize = baseCell * mq.textScaleFactor;
+      if (cellSize * cols + 8 * cols > constraints.maxWidth ||
+          cellSize * rows + 8 * rows > constraints.maxHeight) {
+        cellSize = baseCell;
+      }
+      final fontSize = cellSize * 0.45;
+      return GestureDetector(
+        onTap: _focusFirstEmptyCell,
+        behavior: HitTestBehavior.translucent,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(rows, (r) {
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(cols, (c) {
+                final letter = _board[r][c];
+                final status = _status[r][c];
+                Color bgColor;
+                switch (status) {
+                  case LetterStatus.correct:
+                    bgColor = Colors.green;
+                    break;
+                  case LetterStatus.partial:
+                    bgColor = Colors.yellow;
+                    break;
+                  case LetterStatus.wrong:
+                    bgColor = Colors.grey.shade800;
+                    break;
+                  default:
+                    bgColor = Colors.transparent;
+                }
+                return Container(
+                  width: cellSize,
+                  height: cellSize,
+                  margin: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    color: bgColor,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    letter.toUpperCase(),
+                    style: TextStyle(fontSize: fontSize),
+                  ),
+                );
+              }),
+            );
+          }),
+        ),
+      );
+    });
   }
 
   Widget _buildKeyboard() {
@@ -808,6 +863,7 @@ class _GamePageState extends State<GamePage> {
           bool realOnly = _realWordsOnly;
           bool jump = _jumpToNextLine;
           bool deviceKb = _useDeviceKeyboard;
+          ThemeMode theme = _themeMode;
           return StatefulBuilder(builder: (ctx, setStateSB) {
             return AlertDialog(
               title: const Text('Configurações'),
@@ -835,6 +891,22 @@ class _GamePageState extends State<GamePage> {
                     value: deviceKb,
                     onChanged: (v) => setStateSB(() => deviceKb = v ?? true),
                   ),
+                  ListTile(
+                    title: const Text('Tema'),
+                    trailing: DropdownButton<ThemeMode>(
+                      value: theme,
+                      onChanged: (ThemeMode? v) =>
+                          setStateSB(() => theme = v ?? ThemeMode.system),
+                      items: const [
+                        DropdownMenuItem(
+                            value: ThemeMode.system, child: Text('Sistema')),
+                        DropdownMenuItem(
+                            value: ThemeMode.light, child: Text('Claro')),
+                        DropdownMenuItem(
+                            value: ThemeMode.dark, child: Text('Escuro')),
+                      ],
+                    ),
+                  ),
                 ],
               ),
               actions: [
@@ -845,7 +917,9 @@ class _GamePageState extends State<GamePage> {
                         _realWordsOnly = realOnly;
                         _jumpToNextLine = jump;
                         _useDeviceKeyboard = deviceKb;
+                        _themeMode = theme;
                       });
+                      SuperSenhaApp.of(context).updateTheme(_themeMode);
                       if (_useDeviceKeyboard) {
                         _focusNode.requestFocus();
                       }

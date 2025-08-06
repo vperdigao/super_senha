@@ -144,6 +144,7 @@ class _GamePageState extends State<GamePage> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           _focusNode.requestFocus();
+          SystemChannels.textInput.invokeMethod('TextInput.show');
         }
       });
     }
@@ -322,6 +323,28 @@ class _GamePageState extends State<GamePage> {
           _handleKey(key);
         }
       }
+    }
+  }
+
+  void _focusFirstEmptyCell() {
+    if (_gameOver) return;
+    int row = 0;
+    int col = 0;
+    for (var r = 0; r < rows; r++) {
+      final c = _board[r].indexWhere((e) => e.isEmpty);
+      if (c != -1) {
+        row = r;
+        col = c;
+        break;
+      }
+    }
+    setState(() {
+      _currentRow = row;
+      _currentCol = col;
+    });
+    _focusNode.requestFocus();
+    if (_useDeviceKeyboard) {
+      SystemChannels.textInput.invokeMethod('TextInput.show');
     }
   }
 
@@ -586,42 +609,46 @@ class _GamePageState extends State<GamePage> {
   }
 
   Widget _buildBoard() {
-    return Column(
-      children: List.generate(rows, (r) {
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(cols, (c) {
-            final letter = _board[r][c];
-            final status = _status[r][c];
-            Color bgColor;
-            switch (status) {
-              case LetterStatus.correct:
-                bgColor = Colors.green;
-                break;
-              case LetterStatus.partial:
-                bgColor = Colors.yellow;
-                break;
-              case LetterStatus.wrong:
-                bgColor = Colors.grey.shade800;
-                break;
-              default:
-                bgColor = Colors.transparent;
-            }
-            return Container(
-              width: 40,
-              height: 40,
-              margin: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
-                color: bgColor,
-              ),
-              alignment: Alignment.center,
-              child: Text(letter.toUpperCase(),
-                  style: const TextStyle(fontSize: 18)),
-            );
-          }),
-        );
-      }),
+    return GestureDetector(
+      onTap: _focusFirstEmptyCell,
+      behavior: HitTestBehavior.translucent,
+      child: Column(
+        children: List.generate(rows, (r) {
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(cols, (c) {
+              final letter = _board[r][c];
+              final status = _status[r][c];
+              Color bgColor;
+              switch (status) {
+                case LetterStatus.correct:
+                  bgColor = Colors.green;
+                  break;
+                case LetterStatus.partial:
+                  bgColor = Colors.yellow;
+                  break;
+                case LetterStatus.wrong:
+                  bgColor = Colors.grey.shade800;
+                  break;
+                default:
+                  bgColor = Colors.transparent;
+              }
+              return Container(
+                width: 40,
+                height: 40,
+                margin: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey),
+                  color: bgColor,
+                ),
+                alignment: Alignment.center,
+                child: Text(letter.toUpperCase(),
+                    style: const TextStyle(fontSize: 18)),
+              );
+            }),
+          );
+        }),
+      ),
     );
   }
 

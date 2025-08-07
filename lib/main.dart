@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 enum LetterStatus { initial, correct, partial, wrong }
 
@@ -113,6 +114,9 @@ class _GamePageState extends State<GamePage> {
   late String _todayKey;
   bool _playedToday = false;
 
+  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
+  String? _pendingDailyWord;
+
   Timer? _timer;
   String _countdown = '';
 
@@ -210,18 +214,34 @@ class _GamePageState extends State<GamePage> {
       _won = prefs.getBool('won') ?? false;
     } else {
       _playedToday = savedDate == _todayKey && completed;
+      final connectivityResult = await Connectivity().checkConnectivity();
+      final hasConnection = connectivityResult != ConnectivityResult.none;
       if (!_playedToday) {
-        _secretWord = await _fetchWordOfDay();
-        _usingDailyWord = true;
-        await _saveState();
+        if (hasConnection) {
+          final word = await _fetchWordOfDay();
+          if (word != null) {
+            _secretWord = word;
+            _usingDailyWord = true;
+            await _saveState();
+          } else {
+            _handleOfflineDaily();
+            await _saveState();
+          }
+        } else {
+          _handleOfflineDaily();
+          await _saveState();
+        }
       } else {
         _startRandomWord();
         await _saveState();
       }
     }
+    if (!_usingDailyWord && !_playedToday) {
+      _listenForConnectivity();
+    }
   }
 
-  Future<String> _fetchWordOfDay() async {
+  Future<String?> _fetchWordOfDay() async {
     try {
       final response = await http
           .get(Uri.parse('https://vini.me/supersenha/supersenha.asp'));
@@ -229,14 +249,74 @@ class _GamePageState extends State<GamePage> {
         return response.body.trim().toUpperCase();
       }
     } catch (_) {}
-    final index = DateTime.now().millisecondsSinceEpoch % _dictionary.length;
-    return _dictionary[index];
+    return null;
   }
 
   void _startRandomWord() {
     final rand = Random();
     _usingDailyWord = false;
     _secretWord = _dictionary[rand.nextInt(_dictionary.length)];
+  }
+
+  void _startDailyGame(String word) {
+    setState(() {
+      for (var r = 0; r < rows; r++) {
+        for (var c = 0; c < cols; c++) {
+          _board[r][c] = '';
+        }
+      }
+      _currentRow = 0;
+      _currentCol = 0;
+      _status =
+          List.generate(rows, (_) => List.filled(cols, LetterStatus.initial));
+      _gameOver = false;
+      _won = false;
+      _secretWord = word;
+      _usingDailyWord = true;
+    });
+    _saveState();
+  }
+
+  void _handleOfflineDaily() {
+    _startRandomWord();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text(
+                  'Sem conexão com a internet. A palavra do dia será jogada em outro momento.')),
+        );
+      }
+    });
+  }
+
+  void _listenForConnectivity() {
+    _connectivitySubscription?.cancel();
+    _connectivitySubscription =
+        Connectivity().onConnectivityChanged.listen((result) async {
+      if (result != ConnectivityResult.none && !_usingDailyWord && !_playedToday) {
+        final word = await _fetchWordOfDay();
+        if (word != null) {
+          _pendingDailyWord = word;
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Palavra do dia disponível!'),
+                action: SnackBarAction(
+                  label: 'Jogar',
+                  onPressed: () {
+                    if (_pendingDailyWord != null) {
+                      _startDailyGame(_pendingDailyWord!);
+                      _pendingDailyWord = null;
+                    }
+                  },
+                ),
+              ),
+            );
+          }
+        }
+      }
+    });
   }
 
   Future<void> _saveState() async {
@@ -266,6 +346,14 @@ class _GamePageState extends State<GamePage> {
   }
 
   Future<void> _loadDictionary() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getString('cachedDictionary');
+    if (cached != null) {
+      final List<dynamic> words = json.decode(cached);
+      _dictionary = words.map((w) => w.toString().toUpperCase()).toList();
+    }
+
+    bool updated = false;
     try {
       final response =
           await http.get(Uri.parse('https://vini.me/supersenha/dicionario.js'));
@@ -276,6 +364,8 @@ class _GamePageState extends State<GamePage> {
         final jsonList = text.substring(start, end + 1).replaceAll("'", '"');
         final List<dynamic> words = json.decode(jsonList);
         _dictionary = words.map((w) => w.toString().toUpperCase()).toList();
+        await prefs.setString('cachedDictionary', json.encode(_dictionary));
+        updated = true;
       }
     } catch (_) {}
 
@@ -283,6 +373,9 @@ class _GamePageState extends State<GamePage> {
       final data = await rootBundle.loadString('assets/words.json');
       final List<dynamic> words = json.decode(data);
       _dictionary = words.map((w) => w.toString().toUpperCase()).toList();
+      if (!updated) {
+        await prefs.setString('cachedDictionary', json.encode(_dictionary));
+      }
     }
     _normalizedDictionary =
         _dictionary.map((w) => removeDiacritics(w)).toList();
@@ -327,6 +420,7 @@ class _GamePageState extends State<GamePage> {
     _timer?.cancel();
     _focusNode.dispose();
     _textController.dispose();
+    _connectivitySubscription?.cancel();
     super.dispose();
   }
 

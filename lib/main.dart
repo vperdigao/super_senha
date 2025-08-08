@@ -503,6 +503,14 @@ class _GamePageState extends State<GamePage> {
       _startRandomWord();
     });
     _saveState();
+    if (_useDeviceKeyboard) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _focusNode.requestFocus();
+          SystemChannels.textInput.invokeMethod('TextInput.show');
+        }
+      });
+    }
   }
 
   void _recordGameResult(bool won) {
@@ -570,7 +578,9 @@ class _GamePageState extends State<GamePage> {
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('Você acertou a palavra do dia!!!'),
+          title: Text(_usingDailyWord
+              ? 'Você acertou a palavra do dia!!!'
+              : 'Você acertou!'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -582,9 +592,11 @@ class _GamePageState extends State<GamePage> {
                 child: Text(_secretWord.toUpperCase()),
               ),
               const SizedBox(height: 8),
-              const Text(
-                  'Não se esqueça de voltar amanhã para descobrir a palavra do dia.'),
-              const SizedBox(height: 8),
+              if (_usingDailyWord) ...[
+                const Text(
+                    'Não se esqueça de voltar amanhã para descobrir a palavra do dia.'),
+                const SizedBox(height: 8),
+              ],
               ElevatedButton(
                 onPressed: () {
                   Navigator.pop(context);

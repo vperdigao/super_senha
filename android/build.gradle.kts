@@ -1,3 +1,5 @@
+import com.android.build.gradle.LibraryExtension
+
 allprojects {
     repositories {
         google()
@@ -14,6 +16,16 @@ subprojects {
 }
 subprojects {
     project.evaluationDependsOn(":app")
+}
+
+subprojects {
+    afterEvaluate {
+        extensions.findByType<LibraryExtension>()?.let { androidExt ->
+            if (name == "connectivity_plus" && androidExt.namespace == null) {
+                androidExt.namespace = "dev.fluttercommunity.plus.connectivity"
+            }
+        }
+    }
 }
 
 tasks.register<Delete>("clean") {

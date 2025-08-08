@@ -19,10 +19,10 @@ subprojects {
 }
 
 subprojects {
-    afterEvaluate {
-        extensions.findByType<LibraryExtension>()?.let { androidExt ->
-            if (name == "connectivity_plus" && androidExt.namespace == null) {
-                androidExt.namespace = "dev.fluttercommunity.plus.connectivity"
+    plugins.withId("com.android.library") {
+        extensions.configure<LibraryExtension>("android") {
+            if (name == "connectivity_plus" && namespace == null) {
+                namespace = "dev.fluttercommunity.plus.connectivity"
             }
         }
     }

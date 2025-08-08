@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:in_app_review/in_app_review.dart';
 
 enum LetterStatus { initial, correct, partial, wrong }
 
@@ -179,6 +180,7 @@ class _GamePageState extends State<GamePage> {
         }
       });
     }
+    await _maybeRequestReview();
   }
 
   Future<void> _loadState() async {
@@ -413,6 +415,23 @@ class _GamePageState extends State<GamePage> {
     prefs.setString('dailyStats', json.encode(_wordDayStats.toJson()));
     prefs.setString('generalStats', json.encode(_generalStats.toJson()));
     prefs.setInt('themeMode', _themeMode.index);
+  }
+
+  Future<void> _maybeRequestReview() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastPromptStr = prefs.getString('lastReviewPrompt');
+    final now = DateTime.now();
+    if (lastPromptStr != null) {
+      final lastPrompt = DateTime.tryParse(lastPromptStr);
+      if (lastPrompt != null && now.difference(lastPrompt).inDays < 7) {
+        return;
+      }
+    }
+    final inAppReview = InAppReview.instance;
+    if (await inAppReview.isAvailable()) {
+      await inAppReview.requestReview();
+      await prefs.setString('lastReviewPrompt', now.toIso8601String());
+    }
   }
 
   @override
